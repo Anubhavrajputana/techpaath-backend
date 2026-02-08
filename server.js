@@ -68,7 +68,7 @@ async function startServer() {
     );
 
     /* ===============================
-       🍪 COOKIE PARSER (AUTH FIX)
+       🍪 COOKIE PARSER
     =============================== */
     app.use(cookieParser());
 
@@ -78,20 +78,18 @@ async function startServer() {
     app.use(
       cors({
         origin: (origin, callback) => {
-          // Allow server / Postman
           if (!origin) return callback(null, true);
 
-          // Allow defined origins
           if (allowedOrigins.includes(origin)) {
             return callback(null, true);
           }
 
-          // Allow all Vercel deployments
+          // Allow all Vercel previews
           if (origin.endsWith(".vercel.app")) {
             return callback(null, true);
           }
 
-          // Allow all (fallback safety)
+          // Fallback allow
           return callback(null, true);
         },
         credentials: true,
@@ -114,10 +112,11 @@ async function startServer() {
     =============================== */
     const io = new IOServer(server, {
       cors: {
-        origin: "*",
+        origin: "*",                 // 🔥 Allow all origins
         methods: ["GET", "POST"],
         credentials: true,
       },
+      transports: ["websocket", "polling"], // 🔥 Stable transport
     });
 
     app.set("io", io);
@@ -157,7 +156,7 @@ async function startServer() {
     app.use("/api/mentor", mentorRoutes);
     app.use("/api/feedbacks", feedbackRoutes);
 
-    // Static videos / uploads
+    // Static uploads/videos
     app.use("/videos", videoRoutes);
 
     /* ===============================
@@ -206,6 +205,7 @@ async function startServer() {
       console.log("🛑 Server shutting down...");
       process.exit(0);
     });
+
   } catch (error) {
     console.error("❌ Startup error:", error);
     process.exit(1);
