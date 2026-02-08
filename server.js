@@ -1,5 +1,5 @@
 // =============================
-// SERVER.JS – PRODUCTION READY
+// SERVER.JS – FINAL PRODUCTION READY
 // =============================
 
 import dotenv from "dotenv";
@@ -32,10 +32,11 @@ import workshopRoutes from "./routes/workshop.routes.js";
 import mentorRoutes from "./routes/mentor.routes.js";
 
 /* ===============================
-   🌍 ENV-BASED CORS ORIGINS
+   🌍 ALLOWED ORIGINS
 =============================== */
+
 const allowedOrigins = [
-  process.env.CLIENT_URL, // Production frontend
+  process.env.CLIENT_URL, // production frontend
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ].filter(Boolean);
@@ -43,6 +44,7 @@ const allowedOrigins = [
 /* ===============================
    🚀 START SERVER
 =============================== */
+
 async function startServer() {
   try {
     await connectDB();
@@ -51,12 +53,12 @@ async function startServer() {
     const server = http.createServer(app);
 
     /* ===============================
-       🔐 TRUST PROXY (Render/Vercel)
+       🔐 TRUST PROXY (Render / Vercel)
     =============================== */
     app.set("trust proxy", 1);
 
     /* ===============================
-       🛡️ SECURITY MIDDLEWARE
+       🛡️ SECURITY
     =============================== */
     app.use(
       helmet({
@@ -65,16 +67,25 @@ async function startServer() {
     );
 
     /* ===============================
-       🌐 CORS CONFIG
+       🌐 CORS – FINAL FIX
     =============================== */
     app.use(
       cors({
-        origin: function (origin, callback) {
-          if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error("CORS not allowed"));
+        origin: (origin, callback) => {
+          // allow Postman / server calls
+          if (!origin) return callback(null, true);
+
+          // Allow listed origins
+          if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
           }
+
+          // Allow all Vercel deployments
+          if (origin.endsWith(".vercel.app")) {
+            return callback(null, true);
+          }
+
+          return callback(new Error("CORS not allowed"));
         },
         credentials: true,
       })
@@ -95,7 +106,18 @@ async function startServer() {
     =============================== */
     const io = new IOServer(server, {
       cors: {
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+          if (!origin) return callback(null, true);
+
+          if (
+            allowedOrigins.includes(origin) ||
+            origin.endsWith(".vercel.app")
+          ) {
+            return callback(null, true);
+          }
+
+          callback(new Error("Socket CORS blocked"));
+        },
         credentials: true,
       },
     });
@@ -119,8 +141,9 @@ async function startServer() {
     });
 
     /* ===============================
-       🛣️ ROUTES
+       🛣️ API ROUTES
     =============================== */
+
     app.use("/api/auth", authRoutes);
     app.use("/api/user", userRoutes);
     app.use("/api/internships", internshipsRoute);
@@ -140,17 +163,23 @@ async function startServer() {
     /* ===============================
        ❤️ HEALTH CHECK
     =============================== */
+
     app.get("/", (req, res) => {
       res.send("🚀 TechPaath API running");
     });
 
     app.get("/health", (req, res) => {
-      res.json({ status: "OK", uptime: process.uptime() });
+      res.json({
+        status: "OK",
+        uptime: process.uptime(),
+        timestamp: new Date(),
+      });
     });
 
     /* ===============================
        🚀 START SERVER
     =============================== */
+
     const PORT = process.env.PORT || 5000;
 
     server.listen(PORT, () => {
@@ -160,6 +189,7 @@ async function startServer() {
     /* ===============================
        🧯 GRACEFUL SHUTDOWN
     =============================== */
+
     process.on("SIGINT", () => {
       console.log("🛑 Server shutting down...");
       process.exit(0);
