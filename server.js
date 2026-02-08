@@ -1,5 +1,5 @@
 // =============================
-// SERVER.JS – FINAL FIXED VERSION
+// SERVER.JS – PRODUCTION READY
 // =============================
 
 import dotenv from "dotenv";
@@ -21,22 +21,28 @@ import userRoutes from "./routes/userRoutes.js";
 import internshipsRoute from "./routes/internships.js";
 import enrollRoutes from "./routes/enroll.js";
 import eventsRouter from "./routes/events.js";
-import blogRoutes from "./routes/blogRoutes.js"; // ✅ FIXED
+import blogRoutes from "./routes/blogRoutes.js";
 import videoRoutes from "./routes/videoRoutes.js";
 import webinarRoutes from "./routes/webinarRoutes.js";
 import competitionRoutes from "./routes/competitionRoutes.js";
 import hackathonRoutes from "./routes/hackathonRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import contactSalesRoutes from "./routes/contactSales.js";
-import policies from "./policies.js";
 import workshopRoutes from "./routes/workshop.routes.js";
 import mentorRoutes from "./routes/mentor.routes.js";
 
+/* ===============================
+   🌍 ENV-BASED CORS ORIGINS
+=============================== */
 const allowedOrigins = [
+  process.env.CLIENT_URL, // Production frontend
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-];
+].filter(Boolean);
 
+/* ===============================
+   🚀 START SERVER
+=============================== */
 async function startServer() {
   try {
     await connectDB();
@@ -44,6 +50,49 @@ async function startServer() {
     const app = express();
     const server = http.createServer(app);
 
+    /* ===============================
+       🔐 TRUST PROXY (Render/Vercel)
+    =============================== */
+    app.set("trust proxy", 1);
+
+    /* ===============================
+       🛡️ SECURITY MIDDLEWARE
+    =============================== */
+    app.use(
+      helmet({
+        crossOriginResourcePolicy: false,
+      })
+    );
+
+    /* ===============================
+       🌐 CORS CONFIG
+    =============================== */
+    app.use(
+      cors({
+        origin: function (origin, callback) {
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error("CORS not allowed"));
+          }
+        },
+        credentials: true,
+      })
+    );
+
+    /* ===============================
+       📦 BODY PARSER
+    =============================== */
+    app.use(express.json({ limit: "10mb" }));
+
+    /* ===============================
+       📊 LOGGER
+    =============================== */
+    app.use(morgan("dev"));
+
+    /* ===============================
+       🔌 SOCKET.IO
+    =============================== */
     const io = new IOServer(server, {
       cors: {
         origin: allowedOrigins,
@@ -69,18 +118,15 @@ async function startServer() {
       });
     });
 
-    app.use(helmet({ crossOriginResourcePolicy: false }));
-    app.use(cors({ origin: allowedOrigins, credentials: true }));
-    app.use(express.json({ limit: "10mb" }));
-    app.use(morgan("dev"));
-
-    // ROUTES
+    /* ===============================
+       🛣️ ROUTES
+    =============================== */
     app.use("/api/auth", authRoutes);
     app.use("/api/user", userRoutes);
     app.use("/api/internships", internshipsRoute);
     app.use("/api/enrolls", enrollRoutes);
     app.use("/api/events", eventsRouter);
-    app.use("/api/blogs", blogRoutes); // ✅ WORKING
+    app.use("/api/blogs", blogRoutes);
     app.use("/api/webinars", webinarRoutes);
     app.use("/api/competitions", competitionRoutes);
     app.use("/api/hackathons", hackathonRoutes);
@@ -91,13 +137,32 @@ async function startServer() {
     app.use("/videos", videoRoutes);
     app.use("/api/feedbacks", feedbackRoutes);
 
+    /* ===============================
+       ❤️ HEALTH CHECK
+    =============================== */
     app.get("/", (req, res) => {
       res.send("🚀 TechPaath API running");
     });
 
+    app.get("/health", (req, res) => {
+      res.json({ status: "OK", uptime: process.uptime() });
+    });
+
+    /* ===============================
+       🚀 START SERVER
+    =============================== */
     const PORT = process.env.PORT || 5000;
+
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
+    });
+
+    /* ===============================
+       🧯 GRACEFUL SHUTDOWN
+    =============================== */
+    process.on("SIGINT", () => {
+      console.log("🛑 Server shutting down...");
+      process.exit(0);
     });
   } catch (error) {
     console.error("❌ Startup error:", error);
