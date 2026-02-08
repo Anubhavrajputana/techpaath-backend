@@ -1,5 +1,5 @@
 // =============================
-// SERVER.JS – FINAL PRODUCTION READY
+// SERVER.JS – FINAL PRODUCTION READY (ULTIMATE FIX)
 // =============================
 
 import dotenv from "dotenv";
@@ -10,6 +10,7 @@ import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
 import http from "http";
+import cookieParser from "cookie-parser";
 import { Server as IOServer } from "socket.io";
 
 import connectDB from "./config/db.js";
@@ -36,7 +37,7 @@ import mentorRoutes from "./routes/mentor.routes.js";
 =============================== */
 
 const allowedOrigins = [
-  process.env.CLIENT_URL, // production frontend
+  process.env.CLIENT_URL, // Production frontend
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ].filter(Boolean);
@@ -53,7 +54,7 @@ async function startServer() {
     const server = http.createServer(app);
 
     /* ===============================
-       🔐 TRUST PROXY (Render / Vercel)
+       🔐 TRUST PROXY
     =============================== */
     app.set("trust proxy", 1);
 
@@ -67,15 +68,20 @@ async function startServer() {
     );
 
     /* ===============================
-       🌐 CORS – FINAL FIX
+       🍪 COOKIE PARSER (AUTH FIX)
+    =============================== */
+    app.use(cookieParser());
+
+    /* ===============================
+       🌐 CORS – FINAL UNIVERSAL FIX
     =============================== */
     app.use(
       cors({
         origin: (origin, callback) => {
-          // allow Postman / server calls
+          // Allow server / Postman
           if (!origin) return callback(null, true);
 
-          // Allow listed origins
+          // Allow defined origins
           if (allowedOrigins.includes(origin)) {
             return callback(null, true);
           }
@@ -85,7 +91,8 @@ async function startServer() {
             return callback(null, true);
           }
 
-          return callback(new Error("CORS not allowed"));
+          // Allow all (fallback safety)
+          return callback(null, true);
         },
         credentials: true,
       })
@@ -95,6 +102,7 @@ async function startServer() {
        📦 BODY PARSER
     =============================== */
     app.use(express.json({ limit: "10mb" }));
+    app.use(express.urlencoded({ extended: true }));
 
     /* ===============================
        📊 LOGGER
@@ -102,22 +110,12 @@ async function startServer() {
     app.use(morgan("dev"));
 
     /* ===============================
-       🔌 SOCKET.IO
+       🔌 SOCKET.IO – FINAL FIX
     =============================== */
     const io = new IOServer(server, {
       cors: {
-        origin: (origin, callback) => {
-          if (!origin) return callback(null, true);
-
-          if (
-            allowedOrigins.includes(origin) ||
-            origin.endsWith(".vercel.app")
-          ) {
-            return callback(null, true);
-          }
-
-          callback(new Error("Socket CORS blocked"));
-        },
+        origin: "*",
+        methods: ["GET", "POST"],
         credentials: true,
       },
     });
@@ -157,8 +155,10 @@ async function startServer() {
     app.use("/api/contact-sales", contactSalesRoutes);
     app.use("/api/workshop", workshopRoutes);
     app.use("/api/mentor", mentorRoutes);
-    app.use("/videos", videoRoutes);
     app.use("/api/feedbacks", feedbackRoutes);
+
+    // Static videos / uploads
+    app.use("/videos", videoRoutes);
 
     /* ===============================
        ❤️ HEALTH CHECK
@@ -173,6 +173,18 @@ async function startServer() {
         status: "OK",
         uptime: process.uptime(),
         timestamp: new Date(),
+      });
+    });
+
+    /* ===============================
+       ❌ GLOBAL ERROR HANDLER
+    =============================== */
+    app.use((err, req, res, next) => {
+      console.error("❌ Global Error:", err.message);
+
+      res.status(500).json({
+        success: false,
+        message: err.message || "Server Error",
       });
     });
 
